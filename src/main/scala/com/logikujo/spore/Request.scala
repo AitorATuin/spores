@@ -1,6 +1,5 @@
-package com.logikujo.Spore
+package com.logikujo.spore
 
-import Spore._
 import scalaz._
 import Scalaz._
 import dispatch._
@@ -22,9 +21,9 @@ sealed trait POST extends HttpMethod
 sealed trait ParamsReplacer {
   val str: String
   private val r = ":([a-zA-Z0-9]+)".r
-  private def f(p:Params) = (m:Match) => {
+  private def f(p:Params): Match => ValidationNel[String,String] = (m:Match) => {
     val s = m.toString.drop(1)
-    (p get s).toSuccess(s"Param '$s' is required").toValidationNEL
+    (p get s).toSuccess(s"Param '$s' is required").toValidationNel
   }
 
   def apply(params: Params) = {
@@ -64,11 +63,11 @@ trait MethodRequestOps {
     filter(v.params.get(_).isDefined).map(a => a -> v.params.get(a).get).toMap
   lazy val requiredParams = availableParams(v.method.required_params)
   lazy val optionalParams = availableParams(v.method.optional_params)
-  lazy val replacedPath: scalaz.ValidationNEL[String, List[String]] = v.method.path.drop(1).split("/").toList.map { str =>
+  lazy val replacedPath: ValidationNel[String, List[String]] = v.method.path.drop(1).split("/").toList.map { str =>
     placeHolder.findFirstIn(str) ? {
       requiredParams.get(str.tail).
         toSuccess(s"Parameter '${str.tail}' is required").
-        toValidationNEL
+        toValidationNel
     } | str.successNel
   }.sequenceU
   def +(p:Param) = addParams(p) exec v

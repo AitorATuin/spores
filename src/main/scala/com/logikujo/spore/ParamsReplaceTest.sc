@@ -5,7 +5,7 @@
  * com.logikujo.Spore 25/08/13 :: 20:06 :: eof
  *
  */
-import com.logikujo.Spore._
+import com.logikujo.spore._
 import scalaz._
 import Scalaz._
 val path = "/examplePath/justOneParam.:param1/aComposedParamWith.:param2.And:param3/:singleParam"
@@ -26,16 +26,12 @@ val replacer = ParamsReplacer(path)
 
 val listOfMaps = (0 to myMap.size) map (myMap.slice(0, _)) toList
 
-
-
-
-
 val createString = (l: List[String]) => l.fold("") {
   _ ++ "/" ++ _
 }
 val listOfResults = for {
   m <- listOfMaps
-} yield replacer.replace(m)
+} yield replacer(m)
 
 
 

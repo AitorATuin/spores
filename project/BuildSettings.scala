@@ -5,6 +5,7 @@ trait WithDependencies {
   val dependenciesBuild = Seq(
     "org.scalaz" %% "scalaz-core" % "7.0.6",
     "net.databinder.dispatch" %% "dispatch-core" % "0.11.1",
+    "io.argonaut" %% "argonaut" % "6.1-M2",
     "org.scalatest" % "scalatest_2.10" % "1.9.1" % "test",
     "org.scalamock" %% "scalamock-scalatest-support" % "3.0.1" % "test",
     "org.mockito" % "mockito-core" % "1.8.5" % "test"
