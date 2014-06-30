@@ -1,17 +1,12 @@
 import sbt._
 import sbt.Keys._
+import BuildSettings._
 
-object SporesBuild extends Build {
-
-  lazy val spores = Project(
-    id = "spores",
-    base = file("."),
-    settings = Project.defaultSettings ++ Seq(
-      name := "SporeS",
-      organization := "com.logikujo",
-      version := "0.1-SNAPSHOT",
-      scalaVersion := "2.10.0"
-      // add other settings here
-    )
-  )
+//TODO: Add support for renaming files before copying
+//TODO: Add support for modify files before going to jar. Change files to production mode
+object Server extends Build with WithDependencies with WithResolvers {
+  lazy val module = Project("spores", file(".")).
+    settings(appSettings: _*).
+    settings(libraryDependencies ++= dependenciesBuild).
+    settings(resolvers ++= resolversBuild)
 }
