@@ -22,8 +22,6 @@ package object spore
   with MethodImplicits
   with RequestImplicits
 {
-  type V[A] = String \/ A
-
   class SporeException(msg: String) extends Exception(msg)
 
   // TODO: Create a TypeClass to generalize both cases (and maybe more)

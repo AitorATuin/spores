@@ -63,7 +63,7 @@ object Specification {
 trait SpecificationImplicits {
   type Spec = Specification
   implicit class SpecificationOps(s: Specification) {
-    def apply(method: String): V[MethodRequest] = for {
+    def apply(method: String): String \/ MethodRequest = for {
       m <- s.methods.get(method).\/>(s"Unable to call '$method'")
       r <- m.request(s.base_url)
     } yield r
