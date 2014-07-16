@@ -18,30 +18,6 @@ sealed trait HttpMethod
 sealed trait GET extends HttpMethod
 sealed trait POST extends HttpMethod
 
-sealed trait ParamsReplacer {
-  val str: String
-  private val r = ":([a-zA-Z0-9]+)".r
-  private def f(p:Params): Match => ValidationNel[String,String] = (m:Match) => {
-    val s = m.toString.drop(1) // Remove ':'
-    (p get s).toSuccess(s"Param '$s' is required").toValidationNel
-  }
-
-  def apply(params: Params): ValidationNel[String,String] = {
-    val reduce = (a: String, b: (Match, String)) => b._1.matched.r.replaceFirstIn(a, b._2)
-    val zipAndReduce = (a:List[Match], b:List[String]) => (a zip b).foldLeft(str)(reduce)
-    val matchList = r.findAllMatchIn(str).toList
-    val l = matchList.successNel[String]
-    (matchList.successNel[String] |@|
-      (matchList <*> f(params).pure[List]).sequenceU)(zipAndReduce)
-  }
-}
-
-object ParamsReplacer {
-  def apply(s: String):ParamsReplacer = new ParamsReplacer {
-    val str = s
-  }
-}
-
 sealed trait HttpRequest[M <: HttpMethod] {
   val setParams: SetParamsF
   val url: Req
