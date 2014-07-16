@@ -2,7 +2,7 @@ package com.logikujo.spore
 
 import scalaz._
 import Scalaz._
-import dispatch._
+import dispatch._, Defaults._
 import com.ning.http.client.RequestBuilder
 import scala.util.matching.Regex.Match
 
@@ -22,14 +22,15 @@ sealed trait ParamsReplacer {
   val str: String
   private val r = ":([a-zA-Z0-9]+)".r
   private def f(p:Params): Match => ValidationNel[String,String] = (m:Match) => {
-    val s = m.toString.drop(1)
+    val s = m.toString.drop(1) // Remove ':'
     (p get s).toSuccess(s"Param '$s' is required").toValidationNel
   }
 
-  def apply(params: Params) = {
+  def apply(params: Params): ValidationNel[String,String] = {
     val reduce = (a: String, b: (Match, String)) => b._1.matched.r.replaceFirstIn(a, b._2)
     val zipAndReduce = (a:List[Match], b:List[String]) => (a zip b).foldLeft(str)(reduce)
     val matchList = r.findAllMatchIn(str).toList
+    val l = matchList.successNel[String]
     (matchList.successNel[String] |@|
       (matchList <*> f(params).pure[List]).sequenceU)(zipAndReduce)
   }
@@ -43,14 +44,14 @@ object ParamsReplacer {
 
 sealed trait HttpRequest[M <: HttpMethod] {
   val setParams: SetParamsF
-  val url: RequestBuilder
+  val url: Req
   def doRequest[M](params: Params) =
-    Http(setParams(url, params) OK as.String).either
+    Http(setParams(url, params) OK as.String)
 }
 
 private object HttpRequest {
-  def apply[M](rb: RequestBuilder) = (f:SetParamsF) => new HttpRequest[GET] {
-    val url = rb
+  def apply[M](req: Req) = (f:SetParamsF) => new HttpRequest[GET] {
+    val url = req
     val setParams = f
   }
 }
@@ -58,18 +59,37 @@ private object HttpRequest {
 trait MethodRequestOps {
   import MethodRequest._
   val v: MethodRequest
-  private val placeHolder = ":([^:]+)".r
-  private def availableParams(listParams: List[String]) = listParams.
-    filter(v.params.get(_).isDefined).map(a => a -> v.params.get(a).get).toMap
-  lazy val requiredParams = availableParams(v.method.required_params)
-  lazy val optionalParams = availableParams(v.method.optional_params)
-  lazy val replacedPath: ValidationNel[String, List[String]] = v.method.path.drop(1).split("/").toList.map { str =>
+
+  private def availableParams(listParams: List[String]) = listParams.collect {
+    case param if v.params.contains(param) => param -> v.params(param)
+  }.toMap
+  private lazy val replacedPath = ParamsReplacer(v.method.path)(requiredParams.getOrElse(Map.empty))
+  private lazy val requiredParams: Option[Params] = v.method.required_params.map(availableParams)
+  private lazy val optionalParams: Option[Params] = v.method.optional_params.map(availableParams)
+  /*private val placeHolder = ":([^:]+)".r
+  private def availableParams(listParams: List[String]) = listParams.collect {
+    case param if v.params.contains(param) => param -> v.params(param)
+  }.toMap
+  private def containsParam(paramsOpt: Option[Params]): String => Option[String] = param => for {
+    _ <- placeHolder.findFirstIn(param)
+    params <- paramsOpt
+    paramValue <- params.get(param)
+  } yield paramValue
+  private val isOptionalParam: String => Option[String] = containsParam(optionalParams)
+  private val isRequiredParam: String => Option[String] = containsParam(requiredParams)
+  lazy val requiredParams: Option[Params] = v.method.required_params.map(availableParams)
+  lazy val optionalParams: Option[Params] = v.method.optional_params.map(availableParams)
+  lazy val replacedPath = v.method.path.drop(1).split("/").toList.map {
+      case str if isRequiredParam(str).isDefined =>
+      case str => str.success[NonEmptyList[String]]
+    }*/
+  /*lazy val replacedPath: ValidationNel[String, List[String]] = v.method.path.drop(1).split("/").toList.map { str =>
     placeHolder.findFirstIn(str) ? {
       requiredParams.get(str.tail).
         toSuccess(s"Parameter '${str.tail}' is required").
         toValidationNel
     } | str.successNel
-  }.sequenceU
+  }.sequenceU*/
   def +(p:Param) = addParams(p) exec v
   def +(p:Params) = addParams(p) exec v
   // Monadic + operator
@@ -78,19 +98,19 @@ trait MethodRequestOps {
 
   // Creates a new HttpRequest and executes it. \/ are transformed to Promises
   def !> = {
-    def mkRequestBuilder(url: RequestBuilder, path:List[String]) =
-      path.foldLeft(url)((a,b) => a / b)
-    def mkHttpRequest(httpMethod:String) = (u: RequestBuilder) => httpMethod match {
+    def mkReq(url: Req, path:String): Req =
+      path.split("/").foldLeft(url)((a,b) => a / b)
+    def mkHttpRequest(httpMethod:String) = (u: Req) => httpMethod match {
       case "GET" => u.doRequest[GET](v.params)
       //case "POST" => u.mkRequest[POST](v.params)
     }
     val url = v.method.base_url.map(dispatch.url(_)).get.successNel[String]
-    val rb = (url |@| replacedPath) (mkRequestBuilder)
+    val rb: Validation[NonEmptyList[String], Req] = (url |@| replacedPath) (mkReq)
     (((l:NonEmptyList[String]) => l.list.mkString(";")) <-: rb :-> mkHttpRequest(v.method.method)).disjunction
   }
 
   def ! = (v.!>).fold(
-    e => Http.promise(Left(new Exception(e))),
+    e => Future(Left(new Exception(e))),
     p => p
   )
 }
@@ -109,10 +129,10 @@ object MethodRequest {
 trait RequestImplicits {
   type Param = (String,String)
   type Params = Map[String, String]
-  type SetParamsF = (RequestBuilder, Params) => RequestBuilder
+  type SetParamsF = (Req, Params) => Req
 
-  implicit def HttpRequestGET(rb: RequestBuilder): HttpRequest[GET] =
-    HttpRequest[GET](rb) {(r,p) => r <<? p}
+  implicit def HttpRequestGET(req: Req): HttpRequest[GET] =
+    HttpRequest[GET](req) {(r,p) => r <<? p}
   implicit def MethodRequestOps(mr: MethodRequest): MethodRequestOps = new MethodRequestOps {
     val v = mr
   }

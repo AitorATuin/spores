@@ -18,12 +18,12 @@ case class Method(method: String,
                   description: Option[String],
                   documentation: Option[String],
                   path: String,
-                  optional_params: List[String],
-                  required_params: List[String],
-                  expected: List[Int],
+                  optional_params: Option[List[String]],
+                  required_params: Option[List[String]],
+                  expected_status: Option[List[Int]],
                   authentication: Option[Boolean],
                   base_url: Option[String],
-                  formats: List[String])
+                  formats: Option[List[String]])
 
 
 object MethodL {
@@ -60,7 +60,7 @@ trait MethodImplicits {
         ("path" := m.path) ->:
         ("optional_params" := m.optional_params) ->:
         ("required_params" := m.required_params) ->:
-        ("expected" := m.expected) ->:
+        ("expected" := m.expected_status) ->:
         ("authentication" := m.authentication) ->:
         ("base_url" := m.base_url) ->:
         ("formats" := m.formats) ->: jEmptyObject)

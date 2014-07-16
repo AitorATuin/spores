@@ -24,6 +24,8 @@ package object spore
 {
   type V[A] = String \/ A
 
+  class SporeException(msg: String) extends Exception(msg)
+
   // TODO: Create a TypeClass to generalize both cases (and maybe more)
   //       ToDisjuntion[T] { def disjunction: String \/ T }
   // TODO: Manage Exceptions

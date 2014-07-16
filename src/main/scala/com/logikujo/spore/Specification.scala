@@ -29,26 +29,35 @@ import Argonaut._
 sealed case class Specification(name: String,
                                 authority: Option[String],
                                 base_url: Option[String],
-                                formats: List[String],
+                                formats: Option[List[String]],
                                 version: String,
                                 authentication: Option[Boolean],
                                 methods: Map[String, Method])
 
 object Specification {
+  case class SpecificationParserException(msg: String) extends SporeException(msg)
+  case class SpecificationDecoderException(msg: String) extends SporeException(msg)
   // Tries to parse and deserialize a json String
-  private def specFromJson(json: String): String \/ Specification = Parse.decodeEither[Specification](json)
+  private def specFromJson2(json: String): String \/ Specification = Parse.decodeEither[Specification](json)
+  private def specFromJson(json: String): Try[Specification] = Parse.decode[Specification](json) match {
+    case \/-(spec) => scala.util.Success(spec)
+    case -\/(-\/(msg)) => scala.util.Failure(new SporeException(msg) initCause SpecificationParserException(msg))
+    case -\/(\/-((msg, history))) => scala.util.Failure(new SporeException(msg) initCause SpecificationDecoderException(history.shows))
+    }
 
   // Returns the promised Spec from URL
-  private def fromUrl(u: URL): Future[String \/ Specification] = for {
-    result <- Http(url(u.toString) OK as.String).disjunction
-  } yield result.flatMap(specFromJson)
+  def fromUrl(u: URL): Future[Specification] = for {
+    result <- Http(url(u.toString) OK as.String)
+    spec <- Promise().complete(specFromJson(result)).future
+  } yield spec
 
-  private def fromFile(path: String): Future[String \/ Specification] = for {
-    path <- Paths.get(path).future.disjunction
-    fileContents <- Source.fromFile(path.toString).mkString.future.disjunction
-  } yield fileContents.flatMap(specFromJson)
+  def fromFile(path: String): Future[Specification] = for {
+    path <- Paths.get(path).future
+    fileContents <- Source.fromFile(path.toString).mkString.future
+    spec <- Promise().complete(specFromJson(fileContents)).future
+  } yield spec
 
-  def apply(s: String): Future[String \/ Specification] = fromUrl(new URL(s)).recoverWith {case _ => fromFile(s)}
+  def apply(s: String): Future[Specification] = Future(new URL(s)).flatMap(fromUrl).recoverWith {case _ => fromFile(s)}
 }
 
 trait SpecificationImplicits {
